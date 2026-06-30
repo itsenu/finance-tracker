@@ -586,7 +586,7 @@ body {
       <div class="asset-section">
         <div class="asset-section-header">
           <span class="asset-section-title">🔄 回本追踪</span>
-          <button class="header-add-btn" id="add-roi-btn" title="添加回本追踪">+</button>
+          <button class="header-add-btn" id="add-roi-btn" title="添加回本追踪" onclick="document.getElementById('roi-add-form').style.display=document.getElementById('roi-add-form').style.display==='none'?'block':'none'">+</button>
         </div>
         <div id="roi-list"></div>
       </div>
@@ -1334,10 +1334,6 @@ const ROI = {
     document.getElementById('roi-category').innerHTML = EXPENSE_CATEGORIES.map(c=>'<option value="'+c.key+'">'+c.emoji+' '+c.key+'</option>').join('');
     document.getElementById('roi-date').value = DateUtils.today();
     document.getElementById('roi-submit').addEventListener('click', ()=>this.add());
-    document.getElementById('add-roi-btn').addEventListener('click', ()=>{
-      const f = document.getElementById('roi-add-form');
-      f.style.display = f.style.display === 'none' ? 'block' : 'none';
-    });
     document.getElementById('roi-list').addEventListener('click', e => {
       const ub=e.target.closest('.roi-use-btn'); if(ub){const id=ub.dataset.id;const it=DataStore.getRoiItems().find(r=>r.id===id);if(it){DataStore.updateRoiItem(id,{useCount:(it.useCount||0)+1});ub.classList.add('used');setTimeout(()=>ub.classList.remove('used'),450);this.render();Toast.show('✅ '+it.name+' 使用+1 | '+formatAmount(it.cost/((it.useCount||0)+1))+'/次');}return;}
       const db=e.target.closest('[data-action="roi-delete"]');if(db){const id=db.dataset.id;const it=DataStore.getRoiItems().find(r=>r.id===id);if(it&&confirm('删除 "'+it.name+'" 的回本追踪？')){DataStore.deleteRoiItem(id);this.render();Toast.show('已删除: '+it.name);}return;}
