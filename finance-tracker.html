@@ -310,10 +310,12 @@ body {
 
 /* Inline add form */
 .inline-add-btn {
-  width: 100%; padding: 12px; border: 1.5px dashed var(--color-border);
+  width: 100%; padding: 16px; border: 2px dashed var(--color-border);
   border-radius: var(--radius-md); background: transparent;
-  color: var(--color-text-muted); font-size:0.84rem; font-family:var(--font-sans);
-  cursor: pointer; transition: all 0.2s; margin-bottom: var(--space-2);
+  color: var(--color-text-muted); font-size:0.92rem; font-family:var(--font-sans);
+  font-weight: 500; cursor: pointer; transition: all 0.2s; margin-bottom: var(--space-2);
+  min-height: 56px; -webkit-tap-highlight-color: transparent;
+  user-select: none;
 }
 .inline-add-btn:active { border-color:var(--color-primary-light); color:var(--color-primary); background:var(--color-primary-bg); }
 .inline-form {
