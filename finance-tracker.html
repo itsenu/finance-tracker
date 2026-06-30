@@ -598,8 +598,19 @@ body {
         </div>
         <div class="roi-form-row">
           <label>金额 ¥</label><input type="number" id="roi-cost" placeholder="2800" step="0.01" min="0.01" style="max-width:130px">
+          <label>追踪方式</label>
+          <select id="roi-mode" onchange="document.getElementById('roi-auto-daily-wrap').style.display=this.value==='days'?'flex':'none';document.getElementById('roi-target-wrap').style.display=this.value==='days'?'none':'flex'">
+            <option value="count">📊 按次数</option>
+            <option value="days">📅 按天数</option>
+          </select>
+        </div>
+        <div class="roi-form-row" id="roi-target-wrap">
           <label>目标 ¥/次</label><input type="number" id="roi-target" placeholder="50" step="0.01" min="0.01" style="max-width:110px">
           <label>分类</label><select id="roi-category"></select>
+        </div>
+        <div class="roi-form-row" id="roi-auto-daily-wrap" style="display:none">
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="roi-auto-daily" checked style="width:auto;margin:0"> 每天自动累计一天</label>
+          <label>分类</label><select id="roi-category2"></select>
         </div>
         <button class="submit-btn" id="roi-submit" style="margin-top:var(--space-3)">开始追踪</button>
       </div>
@@ -702,6 +713,12 @@ const DataStore = {
           if (!inv.realizedProfit && inv.realizedProfit !== 0) inv.realizedProfit = null;
         });
         if (!this._cache.settings.recordType) this._cache.settings.recordType = 'expense';
+        // Add mode/autoDaily to old ROI items
+        this._cache.roi_items.forEach(r => {
+          if (!r.mode) r.mode = 'count';
+          if (r.autoDaily === undefined) r.autoDaily = false;
+          if (!r.lastAutoDate) r.lastAutoDate = null;
+        });
         this._cache.version = 4;
       }
       this.save();
@@ -1327,51 +1344,125 @@ const Investments = {
 };
 
 /* ============================================================
-   ROI MODULE (standalone)
+   ROI MODULE (standalone) — supports count & days modes
    ============================================================ */
 const ROI = {
   init() {
-    document.getElementById('roi-category').innerHTML = EXPENSE_CATEGORIES.map(c=>'<option value="'+c.key+'">'+c.emoji+' '+c.key+'</option>').join('');
+    const catOpts = EXPENSE_CATEGORIES.map(c=>'<option value="'+c.key+'">'+c.emoji+' '+c.key+'</option>').join('');
+    document.getElementById('roi-category').innerHTML = catOpts;
+    document.getElementById('roi-category2').innerHTML = catOpts;
     document.getElementById('roi-date').value = DateUtils.today();
     document.getElementById('roi-submit').addEventListener('click', ()=>this.add());
+    // Auto-daily: increment day-count for auto-daily items
+    this._autoDailyTick();
     document.getElementById('roi-list').addEventListener('click', e => {
-      const ub=e.target.closest('.roi-use-btn'); if(ub){const id=ub.dataset.id;const it=DataStore.getRoiItems().find(r=>r.id===id);if(it){DataStore.updateRoiItem(id,{useCount:(it.useCount||0)+1});ub.classList.add('used');setTimeout(()=>ub.classList.remove('used'),450);this.render();Toast.show('✅ '+it.name+' 使用+1 | '+formatAmount(it.cost/((it.useCount||0)+1))+'/次');}return;}
+      const ub=e.target.closest('.roi-use-btn'); if(ub){
+        const id=ub.dataset.id; const it=DataStore.getRoiItems().find(r=>r.id===id);
+        if(it){
+          const isDays=it.mode==='days';
+          DataStore.updateRoiItem(id,{useCount:(it.useCount||0)+1,lastAutoDate:isDays?DateUtils.today():it.lastAutoDate});
+          ub.classList.add('used');setTimeout(()=>ub.classList.remove('used'),450);
+          const label=isDays?'天':'次';
+          const cpu=it.cost/((it.useCount||0)+1);
+          this.render();Toast.show('✅ '+it.name+' +1'+label+' | '+formatAmount(cpu)+'/'+label);
+        }return;
+      }
       const db=e.target.closest('[data-action="roi-delete"]');if(db){const id=db.dataset.id;const it=DataStore.getRoiItems().find(r=>r.id===id);if(it&&confirm('删除 "'+it.name+'" 的回本追踪？')){DataStore.deleteRoiItem(id);this.render();Toast.show('已删除: '+it.name);}return;}
       const eb=e.target.closest('[data-action="roi-edit"]');if(eb){const id=eb.dataset.id;const it=DataStore.getRoiItems().find(r=>r.id===id);if(it)this.edit(it);}
     });
     this.render();
   },
+
+  _autoDailyTick() {
+    const today = DateUtils.today();
+    const items = DataStore.getRoiItems();
+    let changed = false;
+    items.forEach(it => {
+      if (it.mode === 'days' && it.autoDaily) {
+        const lastDate = it.lastAutoDate || it.purchaseDate || today;
+        const daysSince = DateUtils.daysBetween(lastDate, today) - 1; // days since last tick
+        if (daysSince > 0) {
+          it.useCount = (it.useCount || 0) + daysSince;
+          it.lastAutoDate = today;
+          changed = true;
+        }
+      }
+    });
+    if (changed) DataStore.save();
+  },
+
   render() { this.renderList(); },
+
   add() {
     const n=document.getElementById('roi-name').value.trim(),d=document.getElementById('roi-date').value;
-    const c=parseFloat(document.getElementById('roi-cost').value),t=parseFloat(document.getElementById('roi-target').value)||0;
-    const cat=document.getElementById('roi-category').value;
+    const c=parseFloat(document.getElementById('roi-cost').value);
+    const mode=document.getElementById('roi-mode').value;
+    const t=mode==='count'?parseFloat(document.getElementById('roi-target').value)||0:0;
+    const autoDaily=mode==='days'?document.getElementById('roi-auto-daily').checked:false;
+    const cat=mode==='days'?document.getElementById('roi-category2').value:document.getElementById('roi-category').value;
     if(!n||isNaN(c)||c<=0){Toast.show('请填写名称和金额');return;}
-    DataStore.addRoiItem({id:'roi-'+generateId(),name:n,purchaseDate:d,cost:Math.round(c*100)/100,useCount:0,targetPerUse:Math.round(t*100)/100,category:cat,note:'',createdAt:DateUtils.nowISO()});
-    document.getElementById('roi-name').value='';document.getElementById('roi-cost').value='';document.getElementById('roi-target').value='';
+    DataStore.addRoiItem({
+      id:'roi-'+generateId(), name:n, purchaseDate:d, cost:Math.round(c*100)/100,
+      useCount:0, targetPerUse:Math.round(t*100)/100, mode, autoDaily,
+      lastAutoDate: autoDaily ? DateUtils.today() : null,
+      category:cat, note:'', createdAt:DateUtils.nowISO()
+    });
+    document.getElementById('roi-name').value='';document.getElementById('roi-cost').value='';
+    document.getElementById('roi-target').value='';
+    document.getElementById('roi-mode').value='count';
+    document.getElementById('roi-auto-daily').checked=true;
+    document.getElementById('roi-auto-daily-wrap').style.display='none';
+    document.getElementById('roi-target-wrap').style.display='flex';
+    document.getElementById('roi-add-form').style.display='none';
     this.render(); Toast.show('✅ 开始追踪: '+n+' ('+formatAmount(c)+')');
   },
+
   edit(it) {
     const n=prompt('物品名称',it.name);if(n===null)return;
     const c=parseFloat(prompt('金额',it.cost));if(isNaN(c)||c<=0)return;
-    const t=parseFloat(prompt('目标 ¥/次 (0=不设)',it.targetPerUse||0));
-    const u=parseInt(prompt('使用次数',it.useCount||0));if(isNaN(u)||u<0)return;
-    DataStore.updateRoiItem(it.id,{name:n.trim(),cost:Math.round(c*100)/100,targetPerUse:Math.round((t||0)*100)/100,useCount:u});
+    const isDays=it.mode==='days';
+    const mode=confirm('追踪方式:\n"确定"=按次数  "取消"=按天数');
+    if (mode) {
+      // count mode
+      const t=parseFloat(prompt('目标 ¥/次 (0=不设)',it.targetPerUse||0));
+      const u=parseInt(prompt('使用次数',it.useCount||0));if(isNaN(u)||u<0)return;
+      DataStore.updateRoiItem(it.id,{name:n.trim(),mode:'count',targetPerUse:Math.round((t||0)*100)/100,cost:Math.round(c*100)/100,useCount:u});
+    } else {
+      // days mode
+      const u=parseInt(prompt('使用天数',it.useCount||0));if(isNaN(u)||u<0)return;
+      const autoDaily=confirm('每天自动累计一天？\n"确定"=是  "取消"=否');
+      DataStore.updateRoiItem(it.id,{name:n.trim(),mode:'days',autoDaily,targetPerUse:0,cost:Math.round(c*100)/100,useCount:u,lastAutoDate:autoDaily?DateUtils.today():it.lastAutoDate});
+    }
     this.render(); Toast.show('已更新: '+n);
   },
+
   renderList() {
     const ct=document.getElementById('roi-list'); const items=DataStore.getRoiItems();
     if(!items.length){ct.innerHTML='<div style="padding:var(--space-3) 0;font-size:0.82rem;color:var(--color-text-muted)">还没有回本追踪</div>';return;}
     items.sort((a,b)=>b.cost-a.cost);
     ct.innerHTML = items.map(it=>this._card(it)).join('');
   },
+
   _card(it) {
-    const cat=getCat(it.category); const cpu=it.useCount>0?it.cost/it.useCount:it.cost;
-    const days=DateUtils.daysBetween(it.purchaseDate,DateUtils.today());
-    const upw=days>=7?(it.useCount/(days/7)).toFixed(1):'—';
-    const hasT=it.targetPerUse>0; const tp=hasT?Math.min(100,(it.targetPerUse/Math.max(cpu,0.01))*100):0;
+    const cat=getCat(it.category);
+    const isDays=it.mode==='days';
+    const unit=isDays?'天':'次';
+    const cpu=it.useCount>0?it.cost/it.useCount:it.cost;
+    const daysSinceBuy=DateUtils.daysBetween(it.purchaseDate,DateUtils.today());
+    const hasT=!isDays&&it.targetPerUse>0;
+    const tp=hasT?Math.min(100,(it.targetPerUse/Math.max(cpu,0.01))*100):0;
     const reached=hasT&&cpu<=it.targetPerUse;
-    return `<div class="roi-card"><div class="roi-card-header"><div><span class="roi-card-name">${escapeHtml(it.name)}</span><span style="font-size:0.78rem;color:var(--color-text-muted);margin-left:6px">${cat.emoji} ${it.category}</span></div><div class="roi-card-meta">${it.purchaseDate} · ${formatAmount(it.cost)}</div></div><div class="roi-card-stats"><div class="roi-stat"><div class="roi-stat-value">${it.useCount}次</div><div class="roi-stat-label">已使用</div></div><div class="roi-stat ${reached?'success':'warning'}"><div class="roi-stat-value">${formatAmount(cpu)}</div><div class="roi-stat-label">每次成本</div></div><div class="roi-stat"><div class="roi-stat-value">${upw}次/周</div><div class="roi-stat-label">使用频率</div></div></div>${hasT?`<div class="roi-progress-wrap"><div class="roi-progress-info"><span>${reached?'✅ 已达标!':'目标: '+formatAmount(it.targetPerUse)+'/次'}</span><span>${reached?'':'还差 '+formatAmount(cpu-it.targetPerUse)}</span></div><div class="roi-progress-bar"><div class="roi-progress-fill" style="width:${tp}%;background:${reached?'var(--color-success)':'linear-gradient(90deg,var(--color-danger),var(--color-warning))'}"></div><div class="roi-progress-target" style="left:${tp}%"></div></div></div>`:'<div style="margin-bottom:12px;font-size:0.75rem;color:var(--color-text-muted)">未设置目标成本</div>'}<div class="roi-card-actions"><button class="roi-use-btn" data-id="${it.id}">📈 +1 使用</button><button class="btn-sm-outline" data-action="roi-edit" data-id="${it.id}">编辑</button><button class="btn-sm-outline danger" data-action="roi-delete" data-id="${it.id}">删除</button></div></div>`;
+
+    let middleSection='';
+    if (isDays) {
+      const dailyCost=(daysSinceBuy>0?it.cost/daysSinceBuy:it.cost);
+      middleSection=`<div class="roi-card-stats"><div class="roi-stat"><div class="roi-stat-value">${it.useCount}天</div><div class="roi-stat-label">已使用</div></div><div class="roi-stat success"><div class="roi-stat-value">${formatAmount(cpu)}</div><div class="roi-stat-label">每${unit}成本</div></div><div class="roi-stat"><div class="roi-stat-value">${daysSinceBuy}天</div><div class="roi-stat-label">距购买</div></div></div><div style="margin-bottom:12px;font-size:0.75rem;color:var(--color-text-muted);text-align:center">📅 日均成本 ${formatAmount(dailyCost)}${it.autoDaily?' · 🤖 每天自动累计':''}</div>`;
+    } else {
+      const upw=daysSinceBuy>=7?(it.useCount/(daysSinceBuy/7)).toFixed(1):'—';
+      middleSection=`<div class="roi-card-stats"><div class="roi-stat"><div class="roi-stat-value">${it.useCount}次</div><div class="roi-stat-label">已使用</div></div><div class="roi-stat ${reached?'success':'warning'}"><div class="roi-stat-value">${formatAmount(cpu)}</div><div class="roi-stat-label">每次成本</div></div><div class="roi-stat"><div class="roi-stat-value">${upw}次/周</div><div class="roi-stat-label">使用频率</div></div></div>${hasT?`<div class="roi-progress-wrap"><div class="roi-progress-info"><span>${reached?'✅ 已达标!':'目标: '+formatAmount(it.targetPerUse)+'/次'}</span><span>${reached?'':'还差 '+formatAmount(cpu-it.targetPerUse)}</span></div><div class="roi-progress-bar"><div class="roi-progress-fill" style="width:${tp}%;background:${reached?'var(--color-success)':'linear-gradient(90deg,var(--color-danger),var(--color-warning))'}"></div><div class="roi-progress-target" style="left:${tp}%"></div></div></div>`:'<div style="margin-bottom:12px;font-size:0.75rem;color:var(--color-text-muted)">未设置目标成本</div>'}`;
+    }
+
+    return `<div class="roi-card"><div class="roi-card-header"><div><span class="roi-card-name">${escapeHtml(it.name)}</span><span style="font-size:0.78rem;color:var(--color-text-muted);margin-left:6px">${cat.emoji} ${it.category}</span></div><div class="roi-card-meta">${it.purchaseDate} · ${formatAmount(it.cost)}${isDays?' · 📅 按天':' · 📊 按次'}</div></div>${middleSection}<div class="roi-card-actions"><button class="roi-use-btn" data-id="${it.id}">📈 +1 ${unit}</button><button class="btn-sm-outline" data-action="roi-edit" data-id="${it.id}">编辑</button><button class="btn-sm-outline danger" data-action="roi-delete" data-id="${it.id}">删除</button></div></div>`;
   }
 };
 
