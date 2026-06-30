@@ -536,7 +536,6 @@ body {
             <button class="header-add-btn" id="add-card-btn" title="添加银行卡">+</button>
           </div>
         </div>
-        <div id="bank-card-list"></div>
         <div class="inline-form" id="card-form">
           <input type="text" id="card-name" placeholder="卡名" style="width:120px">
           <input type="text" id="card-bank" placeholder="银行" style="width:100px">
@@ -546,6 +545,7 @@ body {
           <button class="btn-sm primary" id="card-save">保存</button>
           <button class="btn-sm ghost" id="card-cancel">取消</button>
         </div>
+        <div id="bank-card-list"></div>
       </div>
     </section>
 
@@ -560,7 +560,6 @@ body {
             <button class="header-add-btn" id="add-invest-btn" title="添加理财">+</button>
           </div>
         </div>
-        <div id="active-invest-list"></div>
         <div class="inline-form" id="invest-form">
           <input type="text" id="inv-name" placeholder="名称" style="width:110px">
           <select id="inv-type"><option value="fund">基金</option><option value="stock">股票</option><option value="deposit">定期</option><option value="other">其他</option></select>
@@ -571,6 +570,7 @@ body {
           <button class="btn-sm primary" id="inv-save">保存</button>
           <button class="btn-sm ghost" id="inv-cancel">取消</button>
         </div>
+        <div id="active-invest-list"></div>
       </div>
       <div class="asset-section">
         <div class="asset-section-header">
@@ -1033,7 +1033,7 @@ const BankCards = {
     </div>`;
   },
   renderCards() {
-    const cards = DataStore.getCards();
+    const cards = DataStore.getCards().sort((a,b)=>(Math.abs(b.balance||0))-(Math.abs(a.balance||0)));
     const list = document.getElementById('bank-card-list');
     if (!cards.length) {
       list.innerHTML = '<div style="padding:var(--space-3) 0;font-size:0.82rem;color:var(--color-text-muted)">还没有添加银行卡</div>';
@@ -1201,7 +1201,7 @@ const Investments = {
     if (!invests.length) {
       list.innerHTML = '<div style="padding:var(--space-3) 0;font-size:0.82rem;color:var(--color-text-muted)">暂无持仓</div>';
     } else {
-      invests.sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+      invests.sort((a,b)=>(b.currentValue||0)-(a.currentValue||0));
       list.innerHTML = invests.map(inv => this._investHtml(inv, false)).join('');
     }
     const totalVal = invests.reduce((s,inv)=>s+(inv.currentValue||0),0);
@@ -1215,7 +1215,7 @@ const Investments = {
     if (!invests.length) {
       list.innerHTML = '<div style="padding:var(--space-3) 0;font-size:0.82rem;color:var(--color-text-muted)">还没有落袋的收益</div>';
     } else {
-      invests.sort((a,b)=>(b.soldDate||'').localeCompare(a.soldDate||''));
+      invests.sort((a,b)=>(b.soldAmount||0)-(a.soldAmount||0));
       list.innerHTML = invests.map(inv => this._investHtml(inv, true)).join('');
     }
     const realizedProfit = invests.reduce((s,inv)=>s+(inv.realizedProfit||0),0);
@@ -1366,7 +1366,7 @@ const ROI = {
   renderList() {
     const ct=document.getElementById('roi-list'); const items=DataStore.getRoiItems();
     if(!items.length){ct.innerHTML='<div style="padding:var(--space-3) 0;font-size:0.82rem;color:var(--color-text-muted)">还没有回本追踪</div>';return;}
-    items.sort((a,b)=>b.createdAt.localeCompare(a.createdAt));
+    items.sort((a,b)=>b.cost-a.cost);
     ct.innerHTML = items.map(it=>this._card(it)).join('');
   },
   _card(it) {
