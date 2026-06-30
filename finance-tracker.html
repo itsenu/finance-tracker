@@ -274,6 +274,15 @@ body {
 }
 .asset-section-header .asset-section-title { font-size:0.88rem; font-weight:600; color:var(--color-text); }
 .asset-section-header .asset-section-total { font-size:0.78rem; color:var(--color-text-muted); font-family:var(--font-mono); font-variant-numeric:tabular-nums; }
+.header-add-btn {
+  width: 34px; height: 34px; border: 2px solid var(--color-border);
+  border-radius: var(--radius-full); background: var(--color-surface);
+  color: var(--color-text-secondary); font-size: 1.3rem; font-weight: 600;
+  cursor: pointer; display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s; flex-shrink: 0; line-height: 1;
+  -webkit-tap-highlight-color: transparent; user-select: none;
+}
+.header-add-btn:active { border-color: var(--color-primary); color: var(--color-primary); background: var(--color-primary-bg); transform: scale(0.92); }
 
 /* Bank card item */
 .bank-card-item {
@@ -522,10 +531,12 @@ body {
       <div class="asset-section">
         <div class="asset-section-header">
           <span class="asset-section-title">💳 我的银行卡</span>
-          <span class="asset-section-total" id="card-total-label"></span>
+          <div style="display:flex;align-items:center;gap:var(--space-2)">
+            <span class="asset-section-total" id="card-total-label"></span>
+            <button class="header-add-btn" id="add-card-btn" title="添加银行卡">+</button>
+          </div>
         </div>
         <div id="bank-card-list"></div>
-        <button class="inline-add-btn" id="add-card-btn">+ 添加银行卡</button>
         <div class="inline-form" id="card-form">
           <input type="text" id="card-name" placeholder="卡名" style="width:120px">
           <input type="text" id="card-bank" placeholder="银行" style="width:100px">
@@ -544,10 +555,12 @@ body {
       <div class="asset-section">
         <div class="asset-section-header">
           <span class="asset-section-title">📈 持仓中</span>
-          <span class="asset-section-total" id="active-invest-total"></span>
+          <div style="display:flex;align-items:center;gap:var(--space-2)">
+            <span class="asset-section-total" id="active-invest-total"></span>
+            <button class="header-add-btn" id="add-invest-btn" title="添加理财">+</button>
+          </div>
         </div>
         <div id="active-invest-list"></div>
-        <button class="inline-add-btn" id="add-invest-btn">+ 添加理财</button>
         <div class="inline-form" id="invest-form">
           <input type="text" id="inv-name" placeholder="名称" style="width:110px">
           <select id="inv-type"><option value="fund">基金</option><option value="stock">股票</option><option value="deposit">定期</option><option value="other">其他</option></select>
@@ -573,10 +586,11 @@ body {
       <div class="asset-section">
         <div class="asset-section-header">
           <span class="asset-section-title">🔄 回本追踪</span>
+          <button class="header-add-btn" id="add-roi-btn" title="添加回本追踪">+</button>
         </div>
         <div id="roi-list"></div>
       </div>
-      <div class="roi-form" style="margin-top:var(--space-4)">
+      <div class="roi-form" id="roi-add-form" style="margin-top:var(--space-4);display:none">
         <h3 style="font-size:0.88rem;margin-bottom:var(--space-3);color:var(--color-primary-dark);font-weight:600">➕ 添加回本追踪</h3>
         <div class="roi-form-row">
           <label>物品名称</label><input type="text" id="roi-name" placeholder="例如: Switch2">
@@ -1320,6 +1334,10 @@ const ROI = {
     document.getElementById('roi-category').innerHTML = EXPENSE_CATEGORIES.map(c=>'<option value="'+c.key+'">'+c.emoji+' '+c.key+'</option>').join('');
     document.getElementById('roi-date').value = DateUtils.today();
     document.getElementById('roi-submit').addEventListener('click', ()=>this.add());
+    document.getElementById('add-roi-btn').addEventListener('click', ()=>{
+      const f = document.getElementById('roi-add-form');
+      f.style.display = f.style.display === 'none' ? 'block' : 'none';
+    });
     document.getElementById('roi-list').addEventListener('click', e => {
       const ub=e.target.closest('.roi-use-btn'); if(ub){const id=ub.dataset.id;const it=DataStore.getRoiItems().find(r=>r.id===id);if(it){DataStore.updateRoiItem(id,{useCount:(it.useCount||0)+1});ub.classList.add('used');setTimeout(()=>ub.classList.remove('used'),450);this.render();Toast.show('✅ '+it.name+' 使用+1 | '+formatAmount(it.cost/((it.useCount||0)+1))+'/次');}return;}
       const db=e.target.closest('[data-action="roi-delete"]');if(db){const id=db.dataset.id;const it=DataStore.getRoiItems().find(r=>r.id===id);if(it&&confirm('删除 "'+it.name+'" 的回本追踪？')){DataStore.deleteRoiItem(id);this.render();Toast.show('已删除: '+it.name);}return;}
